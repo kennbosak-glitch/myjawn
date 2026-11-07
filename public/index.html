@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyJawn</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Trebuchet MS',Verdana,sans-serif; background:#14101f; color:#f3eefc; }
+  button { font-family:inherit; cursor:pointer; border:0; border-radius:8px; padding:7px 12px; background:#ff7847; color:#fff; font-weight:bold; }
+  button:hover { background:#ff8f66; } button:disabled { background:#55486e; cursor:default; }
+  button.ghost { background:#2c2344; color:#cfc4ee; }
+  input, select { font-family:inherit; padding:8px; border-radius:8px; border:1px solid #453a63; background:#1e1830; color:#fff; }
+  /* auth */
+  #auth { max-width:360px; margin:9vh auto; background:#211a38; border:2px solid #453a63; border-radius:16px; padding:28px; text-align:center; }
+  #auth h1 { margin:0 0 4px; font-size:44px; letter-spacing:1px; color:#ffb347; text-shadow:3px 3px 0 #7b2d8b; }
+  #auth p { color:#bdb0e0; margin:0 0 18px; }
+  #auth input { width:100%; margin:6px 0; }
+  #auth .row { display:flex; gap:8px; margin-top:10px; } #auth .row button { flex:1; }
+  #authErr { color:#ff7b7b; min-height:20px; font-size:14px; }
+  /* game layout */
+  #game { display:none; height:100vh; }
+  #main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #topbar { display:flex; align-items:center; gap:14px; padding:8px 14px; background:#211a38; border-bottom:2px solid #453a63; flex-wrap:wrap; }
+  #logo { font-size:26px; font-weight:bold; color:#ffb347; text-shadow:2px 2px 0 #7b2d8b; }
+  #notes { background:#2c2344; border-radius:20px; padding:5px 14px; color:#ffd76a; font-weight:bold; }
+  #roomName { color:#bdb0e0; }
+  #canvasWrap { flex:1; position:relative; background:#0d0a16; }
+  canvas { position:absolute; inset:0; width:100%; height:100%; }
+  #chatbar { display:flex; gap:8px; padding:8px; background:#211a38; border-top:2px solid #453a63; }
+  #chatInput { flex:1; }
+  #side { width:300px; background:#1e1830; border-left:2px solid #453a63; padding:12px; overflow-y:auto; }
+  #side h3 { margin:14px 0 6px; color:#ffb347; font-size:15px; text-transform:uppercase; letter-spacing:1px; }
+  #side h3:first-child { margin-top:0; }
+  .item { display:flex; justify-content:space-between; align-items:center; background:#2c2344; border-radius:8px; padding:6px 9px; margin:5px 0; font-size:14px; }
+  .item .swatch { width:14px; height:14px; border-radius:4px; display:inline-block; margin-right:7px; vertical-align:-2px; }
+  .item.sel { outline:2px solid #ffb347; }
+  .item button { padding:4px 10px; font-size:13px; }
+  #chatlog { height:130px; overflow-y:auto; background:#171227; border-radius:8px; padding:8px; font-size:13px; }
+  #chatlog div { margin:3px 0; } #chatlog b { color:#ffb347; }
+  #hint { font-size:12.5px; color:#9d8fc7; line-height:1.5; }
+  #toast { position:absolute; left:50%; top:14px; transform:translateX(-50%); background:#000a; padding:8px 16px; border-radius:20px; font-size:14px; display:none; z-index:5; }
+  .frow { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
+</style>
+</head>
+<body>
+
+<div id="auth">
+  <h1>MyJawn</h1>
+  <p>Your room. Your people. Your noise.</p>
+  <input id="au" placeholder="Username" autocomplete="username">
+  <input id="ap" type="password" placeholder="Password" autocomplete="current-password">
+  <div id="authErr"></div>
+  <div class="row"><button id="btnLogin">Log in</button><button id="btnRegister" class="ghost">Register</button></div>
+</div>
+
+<div id="game">
+  <div id="main">
+    <div id="topbar">
+      <span id="logo">MyJawn</span>
+      <span id="notes">♪ 0 Notes</span>
+      <span id="roomName"></span>
+      <span style="flex:1"></span>
+      <button id="btnLobby" class="ghost">Lobby</button>
+      <button id="btnMine" class="ghost">My Jawn</button>
+      <input id="visitUser" placeholder="visit username" style="width:130px">
+      <button id="btnVisit" class="ghost">Visit</button>
+      <button id="btnFaucet" style="display:none">🥤 Claim +25♪</button>
+    </div>
+    <div id="canvasWrap"><canvas id="cv"></canvas><div id="toast"></div></div>
+    <div id="chatbar"><input id="chatInput" placeholder="Say something…" maxlength="200"><button id="btnSay">Say</button></div>
+  </div>
+  <div id="side">
+    <h3>Your look</h3>
+    <div class="frow" id="lookBtns">
+      <button class="ghost" data-look="B1">Base B1</button><button class="ghost" data-look="B2">Base B2</button>
+    </div>
+    <p id="hint">Pick your base — everyone in the room sees the change, and it is saved to your account.</p>
+    <h3>Chat</h3><div id="chatlog"></div>
+    <h3>Store</h3><div id="store"></div>
+    <h3>Inventory</h3><div id="inv"></div>
+    <h3>Room style</h3>
+    <div class="frow" id="floorBtns">
+      <button class="ghost" data-floor="wood">Wood</button><button class="ghost" data-floor="carpet">Carpet</button><button class="ghost" data-floor="checker">Checker</button>
+    </div>
+    <div class="frow" id="wallBtns">
+      <button class="ghost" data-wall="cream">Cream</button><button class="ghost" data-wall="sky">Sky</button><button class="ghost" data-wall="plum">Plum</button><button class="ghost" data-wall="mint">Mint</button>
+    </div>
+    <h3>Selected furniture</h3>
+    <div class="frow"><button id="btnRot" class="ghost" disabled>Rotate</button><button id="btnRemove" class="ghost" disabled>Remove</button></div>
+    <p id="hint">Click a tile to walk. Buy from the store, then click an inventory item and a tile in <b>your own Jawn</b> to place it. In your room you can also click placed furniture to select it, then click a tile to move it, rotate, or remove it. The soda machine pays out +25♪ once a day.</p>
+  </div>
+</div>
+
+<script>
+const TW = 64, TH = 32, WALL_H = 96;
+const WALL_COLORS = { cream:'#f5e6c8', sky:'#aed6f1', plum:'#d2b4de', mint:'#a9dfbf' };
+let token = localStorage.getItem('mj_token') || '';
+let me = '', myNotes = 0, myInv = {};
+let ws = null, catalogue = [];
+let room = { id:'', owner:'', floor:'wood', wall:'cream', furniture:[], gridW:12, gridH:10 };
+let players = new Map(); // username -> {x,y, rx,ry, queue:[], bubble:{text,until}}
+let placeItem = null, selFurni = null, hoverTile = null, faucet = { present:false, ready:false };
+const sprites = {}; let avatarSprite = null;
+const baseSprites = {}; // look id -> full-canvas base image (1024x1024, anchored)
+const BASE_ANCHORS = { feet: 976/1024, groundX: 490.1/1024 }; // measured, B1/B2 share geometry
+let myLook = 'B1';
+
+const $ = id => document.getElementById(id);
+function toast(msg, ms=2400){ const t=$('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none', ms); }
+
+/* ---------- sprites (manifest with placeholder fallback) ---------- */
+async function loadSprites(){
+  try {
+    const man = await (await fetch('/assets/manifest.json')).json();
+    const load = (key, file) => new Promise(done => {
+      const img = new Image();
+      img.onload = () => { sprites[key] = img; done(); };
+      img.onerror = () => done();
+      img.src = '/assets/' + file;
+    });
+    const jobs = [];
+    for (const [id, file] of Object.entries(man.items || {})) jobs.push(load('item:'+id, file));
+    for (const [name, file] of Object.entries(man.floors || {})) jobs.push(load('floor:'+name, file));
+    if (man.avatar) jobs.push(load('avatar', man.avatar).then(()=> avatarSprite = sprites['avatar'] || null));
+    for (const [id, file] of Object.entries(man.bases || {})) jobs.push(load('base:'+id, file).then(()=> baseSprites[id] = sprites['base:'+id] || null));
+    await Promise.all(jobs);
+  } catch(e) { /* no manifest -> all placeholders */ }
+}
+
+/* ---------- auth ---------- */
+async function authCall(pathName){
+  const r = await fetch(pathName, { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ username: $('au').value.trim(), password: $('ap').value }) });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'failed');
+  return d;
+}
+async function enterGame(d){
+  token = d.token; me = d.username; localStorage.setItem('mj_token', token);
+  $('auth').style.display = 'none'; $('game').style.display = 'flex';
+  catalogue = await (await fetch('/api/catalogue')).json();
+  renderStore(); connect();
+}
+$('btnLogin').onclick = async () => { try { enterGame(await authCall('/api/login')); } catch(e){ $('authErr').textContent = e.message; } };
+$('btnRegister').onclick = async () => { try { enterGame(await authCall('/api/register')); } catch(e){ $('authErr').textContent = e.message; } };
+if (token) { // try resuming a saved session
+  fetch('/api/me', { headers:{ Authorization:'Bearer '+token } })
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(u => enterGame({ token, username: u.username, notes: u.notes }))
+    .catch(() => { token=''; localStorage.removeItem('mj_token'); });
+}
+
+/* ---------- websocket ---------- */
+function connect(){
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+  ws.onopen = () => ws.send(JSON.stringify({ t:'auth', token }));
+  ws.onmessage = ev => handle(JSON.parse(ev.data));
+  ws.onclose = () => setTimeout(() => { if (token) connect(); }, 2500);
+}
+function send(o){ if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+
+function handle(m){
+  switch(m.t){
+    case 'roomState': {
+      room = m; selFurni = null; placeItem = null;
+      players.clear();
+      for (const p of m.players) players.set(p.username, { x:p.x, y:p.y, rx:p.x, ry:p.y, queue:[], bubble:null, look:p.look || 'B1' });
+      faucet = m.faucet || faucet; updateFaucetBtn(); renderInv();
+      $('roomName').textContent = m.room === 'lobby' ? '📣 The Lobby' : (m.owner === me ? '🏠 My Jawn' : '🏠 ' + m.owner + "'s Jawn");
+      break;
+    }
+    case 'playerJoin': if (!players.has(m.username)) players.set(m.username, { x:m.x, y:m.y, rx:m.x, ry:m.y, queue:[], bubble:null, look:m.look || 'B1' }); break;
+    case 'lookUpdate': { const p = players.get(m.username); if (p) p.look = m.look; if (m.username === me) myLook = m.look; break; }
+    case 'playerLeave': players.delete(m.username); break;
+    case 'move': {
+      const p = players.get(m.username); if (!p) break;
+      if (m.path && m.path.length) p.queue = m.path.slice(); else { p.x = m.x; p.y = m.y; p.rx = m.x; p.ry = m.y; }
+      break;
+    }
+    case 'chat': {
+      const p = players.get(m.username); if (p) p.bubble = { text:m.text, until: Date.now()+4500 };
+      const d = document.createElement('div'); d.innerHTML = '<b></b> '; d.querySelector('b').textContent = m.username; d.append(m.text);
+      $('chatlog').append(d); $('chatlog').scrollTop = 1e6;
+      break;
+    }
+    case 'furniUpdate': room.furniture = m.furniture; if (m.floor) room.floor = m.floor; if (m.wall) room.wall = m.wall; renderInv(); break;
+    case 'you': myNotes = m.notes; myInv = m.inventory; if (m.look) { myLook = m.look; const mp = players.get(me); if (mp) mp.look = m.look; } $('notes').textContent = '♪ ' + myNotes + ' Notes'; renderInv(); break;
+    case 'bought': toast('Bought! Find it in your inventory.'); break;
+    case 'faucet': faucet = m; updateFaucetBtn(); if (m.claimed) toast('+' + m.claimed + '♪ from the soda machine 🥤'); break;
+    case 'error': toast('⚠ ' + m.msg); break;
+  }
+}
+function updateFaucetBtn(){ $('btnFaucet').style.display = (faucet.present && faucet.ready) ? '' : 'none'; }
+$('btnFaucet').onclick = () => send({ t:'faucet' });
+
+/* ---------- store / inventory ---------- */
+function itemDef(id){ return catalogue.find(i => i.id === id); }
+function renderStore(){
+  $('store').innerHTML = '';
+  for (const it of catalogue){
+    const d = document.createElement('div'); d.className = 'item';
+    d.innerHTML = '<span><span class="swatch" style="background:'+it.color+'"></span>' + it.name + '</span>';
+    const b = document.createElement('button'); b.textContent = it.price + '♪';
+    b.onclick = () => send({ t:'buy', itemId: it.id });
+    d.append(b); $('store').append(d);
+  }
+}
+function placedCount(id){ return room.furniture.filter(f => f.item === id).length; }
+function renderInv(){
+  $('inv').innerHTML = '';
+  const ids = Object.keys(myInv).filter(id => myInv[id] > 0);
+  if (!ids.length) $('inv').innerHTML = '<div id="hint">Empty — buy something!</div>';
+  for (const id of ids){
+    const it = itemDef(id); if (!it) continue;
+    const free = myInv[id] - (room.owner === me ? placedCount(id) : 0);
+    const d = document.createElement('div'); d.className = 'item' + (placeItem === id ? ' sel' : '');
+    d.innerHTML = '<span><span class="swatch" style="background:'+it.color+'"></span>' + it.name + '</span><span>×' + myInv[id] + (room.owner===me ? ' ('+free+' free)' : '') + '</span>';
+    d.onclick = () => { placeItem = placeItem === id ? null : id; selFurni = null; syncSelBtns(); renderInv(); };
+    $('inv').append(d);
+  }
+}
+function syncSelBtns(){ const on = !!selFurni && room.owner === me; $('btnRot').disabled = !on; $('btnRemove').disabled = !on; }
+$('btnRot').onclick = () => { if (selFurni) send({ t:'moveFurni', instId: selFurni.inst, x: selFurni.x, y: selFurni.y, rot: selFurni.rot ? 0 : 1 }); };
+$('btnRemove').onclick = () => { if (selFurni) { send({ t:'remove', instId: selFurni.inst }); selFurni = null; syncSelBtns(); } };
+document.querySelectorAll('#lookBtns button').forEach(b => b.onclick = () => send({ t:'setLook', look: b.dataset.look }));
+document.querySelectorAll('#floorBtns button').forEach(b => b.onclick = () => send({ t:'setStyle', floor: b.dataset.floor }));
+document.querySelectorAll('#wallBtns button').forEach(b => b.onclick = () => send({ t:'setStyle', wall: b.dataset.wall }));
+
+/* ---------- rooms / chat ---------- */
+$('btnLobby').onclick = () => send({ t:'join', room:'lobby' });
+$('btnMine').onclick = () => send({ t:'join', room:'user:' + me });
+$('btnVisit').onclick = () => { const u = $('visitUser').value.trim(); if (u) send({ t:'join', room:'user:' + u }); };
+function say(){ const v = $('chatInput').value.trim(); if (v) { send({ t:'chat', text: v }); $('chatInput').value = ''; } }
+$('btnSay').onclick = say;
+$('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') say(); });
+
+/* ---------- isometric rendering ---------- */
+const cv = $('cv'), ctx = cv.getContext('2d');
+function resize(){ const r = $('canvasWrap').getBoundingClientRect(); cv.width = r.width; cv.height = r.height; }
+addEventListener('resize', resize);
+function origin(){ return { x: cv.width/2, y: 110 }; }
+function iso(x, y){ const o = origin(); return { x: o.x + (x - y) * TW/2, y: o.y + (x + y) * TH/2 }; }
+function screenToTile(px, py){
+  const o = origin();
+  const fx = ((px - o.x) / (TW/2) + (py - o.y) / (TH/2)) / 2;
+  const fy = ((py - o.y) / (TH/2) - (px - o.x) / (TW/2)) / 2;
+  return { x: Math.floor(fx), y: Math.floor(fy) };
+}
+function diamond(cx, cy, w, h){ ctx.beginPath(); ctx.moveTo(cx, cy - h/2); ctx.lineTo(cx + w/2, cy); ctx.lineTo(cx, cy + h/2); ctx.lineTo(cx - w/2, cy); ctx.closePath(); }
+
+function floorColor(x, y){
+  if (room.floor === 'carpet') return (x+y)%2 ? '#5b2c6f' : '#633974';
+  if (room.floor === 'checker') return (x+y)%2 ? '#ecf0f1' : '#2c3e50';
+  return (x+y)%2 ? '#a97c50' : '#b08968';
+}
+function draw(){
+  requestAnimationFrame(draw);
+  if (!room.id) return;
+  // movement stepping
+  for (const p of players.values()){
+    if (p.queue.length){
+      const tgt = p.queue[0], sp = 0.09;
+      const dx = tgt.x - p.rx, dy = tgt.y - p.ry, dist = Math.hypot(dx, dy);
+      if (dist < sp){ p.rx = tgt.x; p.ry = tgt.y; p.x = tgt.x; p.y = tgt.y; p.queue.shift(); }
+      else { p.rx += dx/dist*sp; p.ry += dy/dist*sp; }
+    } else { p.rx = p.x; p.ry = p.y; }
+  }
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const W = room.gridW, H = room.gridH;
+  // walls (back two edges)
+  const wc = WALL_COLORS[room.wall] || '#f5e6c8';
+  const a = iso(0,0), b = iso(W,0), c2 = iso(0,H);
+  ctx.fillStyle = shade(wc, -18);
+  ctx.beginPath(); ctx.moveTo(a.x, a.y - WALL_H); ctx.lineTo(b.x, b.y - WALL_H); ctx.lineTo(b.x, b.y); ctx.lineTo(a.x, a.y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = shade(wc, -34);
+  ctx.beginPath(); ctx.moveTo(a.x, a.y - WALL_H); ctx.lineTo(c2.x, c2.y - WALL_H); ctx.lineTo(c2.x, c2.y); ctx.lineTo(a.x, a.y); ctx.closePath(); ctx.fill();
+  // floor
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const s = iso(x + .5, y + .5);
+    const spr = sprites['floor:' + room.floor];
+    if (spr){ ctx.save(); diamond(s.x, s.y, TW, TH); ctx.clip(); ctx.drawImage(spr, s.x - TW/2, s.y - TH/2, TW, TH); ctx.restore(); }
+    else { diamond(s.x, s.y, TW, TH); ctx.fillStyle = floorColor(x, y); ctx.fill(); }
+    ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.stroke();
+  }
+  if (hoverTile && hoverTile.x >= 0 && hoverTile.y >= 0 && hoverTile.x < W && hoverTile.y < H){
+    const s = iso(hoverTile.x + .5, hoverTile.y + .5);
+    diamond(s.x, s.y, TW, TH); ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fill();
+  }
+  // drawables sorted back-to-front
+  const draws = [];
+  for (const f of room.furniture) draws.push({ k: f.x + f.y + (itemDef(f.item)?.walkable ? 0.01 : 0.5), f });
+  for (const [name, p] of players) draws.push({ k: p.rx + p.ry + 0.9, name, p });
+  draws.sort((m, n) => m.k - n.k);
+  for (const d of draws){
+    if (d.f) drawFurni(d.f);
+    else drawAvatar(d.name, d.p);
+  }
+}
+function shade(hex, amt){
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.min(255, (n>>16) + amt)), g = Math.max(0, Math.min(255, ((n>>8)&255) + amt)), bl = Math.max(0, Math.min(255, (n&255) + amt));
+  return 'rgb(' + r + ',' + g + ',' + bl + ')';
+}
+function drawFurni(f){
+  const it = itemDef(f.item); if (!it) return;
+  const w = f.rot ? it.d : it.w, dpt = f.rot ? it.w : it.d;
+  const spr = sprites['item:' + f.item];
+  const cen = iso(f.x + w/2, f.y + dpt/2);
+  const botY = iso(f.x + w, f.y + dpt).y;
+  if (selFurni && selFurni.inst === f.inst){ diamond(cen.x, cen.y, (w+dpt)*TW/2, (w+dpt)*TH/2); ctx.strokeStyle = '#ffb347'; ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1; }
+  if (spr){
+    const wpx = (w + dpt) * TW/2;
+    ctx.drawImage(spr, cen.x - wpx/2, botY - wpx, wpx, wpx);
+    return;
+  }
+  if (it.walkable){ diamond(cen.x, cen.y, (w+dpt)*TW/2 - 4, (w+dpt)*TH/2 - 2); ctx.fillStyle = it.color; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.stroke(); return; }
+  const hgt = ['C4','C6','C8','C14'].includes(f.item) ? 52 : 30;
+  const topW = (w + dpt) * TW/2 * 0.82, topH = (w + dpt) * TH/2 * 0.82;
+  // sides
+  ctx.fillStyle = shade(it.color, -45);
+  ctx.beginPath(); ctx.moveTo(cen.x - topW/2, cen.y); ctx.lineTo(cen.x, cen.y + topH/2); ctx.lineTo(cen.x, cen.y + topH/2 + hgt); ctx.lineTo(cen.x - topW/2, cen.y + hgt); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = shade(it.color, -25);
+  ctx.beginPath(); ctx.moveTo(cen.x + topW/2, cen.y); ctx.lineTo(cen.x, cen.y + topH/2); ctx.lineTo(cen.x, cen.y + topH/2 + hgt); ctx.lineTo(cen.x + topW/2, cen.y + hgt); ctx.closePath(); ctx.fill();
+  // top
+  diamond(cen.x, cen.y, topW, topH); ctx.fillStyle = it.color; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.font = 'bold 15px Trebuchet MS'; ctx.textAlign = 'center';
+  ctx.fillText(f.item.replace(/^C/, ''), cen.x, cen.y + 5);
+}
+function drawAvatar(name, p){
+  const s = iso(p.rx + .5, p.ry + .5);
+  ctx.fillStyle = 'rgba(0,0,0,.3)';
+  ctx.beginPath(); ctx.ellipse(s.x, s.y + 2, 14, 5, 0, 0, 7); ctx.fill();
+  const baseImg = baseSprites[p.look] || avatarSprite;
+  if (baseImg) { const DW = 76, DH = 76; ctx.drawImage(baseImg, s.x - BASE_ANCHORS.groundX * DW, s.y + 4 - BASE_ANCHORS.feet * DH, DW, DH); }
+  else {
+    ctx.fillStyle = name === me ? '#ffb347' : '#7fd4ff';
+    ctx.beginPath(); ctx.arc(s.x, s.y - 26, 13, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2c2344'; ctx.fillRect(s.x - 9, s.y - 14, 18, 13);
+  }
+  ctx.font = '12px Trebuchet MS'; ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,0,0,.55)'; const wpx = ctx.measureText(name).width + 10;
+  ctx.fillRect(s.x - wpx/2, s.y - 58, wpx, 15);
+  ctx.fillStyle = '#fff'; ctx.fillText(name, s.x, s.y - 46.5);
+  if (p.bubble && p.bubble.until > Date.now()){
+    ctx.font = '13px Trebuchet MS';
+    const tw = Math.min(200, ctx.measureText(p.bubble.text).width + 16);
+    roundRect(s.x - tw/2, s.y - 96, tw, 24, 9); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(s.x - 5, s.y - 73); ctx.lineTo(s.x + 5, s.y - 73); ctx.lineTo(s.x, s.y - 64); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#222'; ctx.fillText(p.bubble.text, s.x, s.y - 79, tw - 10);
+  }
+}
+function roundRect(x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+/* ---------- mouse ---------- */
+cv.addEventListener('mousemove', e => { const r = cv.getBoundingClientRect(); hoverTile = screenToTile(e.clientX - r.left, e.clientY - r.top); });
+cv.addEventListener('click', e => {
+  const r = cv.getBoundingClientRect();
+  const t = screenToTile(e.clientX - r.left, e.clientY - r.top);
+  if (t.x < 0 || t.y < 0 || t.x >= room.gridW || t.y >= room.gridH) return;
+  if (placeItem){
+    if (room.owner !== me) return toast('You can only decorate your own Jawn.');
+    send({ t:'place', itemId: placeItem, x: t.x, y: t.y, rot: 0 });
+    return;
+  }
+  if (room.owner === me){
+    // furniture hit? (topmost last)
+    const hits = room.furniture.filter(f => { const it = itemDef(f.item); const w = f.rot ? it.d : it.w, d = f.rot ? it.w : it.d; return t.x >= f.x && t.x < f.x + w && t.y >= f.y && t.y < f.y + d; });
+    if (hits.length && !selFurni){ selFurni = hits[hits.length - 1]; syncSelBtns(); return; }
+    if (selFurni){ const f = selFurni; send({ t:'moveFurni', instId: f.inst, x: t.x, y: t.y, rot: f.rot }); selFurni = null; syncSelBtns(); return; }
+  }
+  send({ t:'move', x: t.x, y: t.y });
+});
+
+loadSprites();
+resize();
+requestAnimationFrame(draw);
+setInterval(resize, 1500);
+</script>
+</body>
+</html>
